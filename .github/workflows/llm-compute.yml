@@ -23,8 +23,8 @@ jobs:
 
       - name: Download llama.cpp (prebuilt)
         run: |
-          curl -sL -m 300 -o llamacpp.zip https://github.com/ggml-org/llama.cpp/releases/download/b11529/llama-b11529-bin-ubuntu-x64.zip
-          unzip -q -o llamacpp.zip
+          curl -sL -m 300 -o llamacpp.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b11529/llama-b11529-bin-ubuntu-x64.tar.gz
+          tar xzf llamacpp.tar.gz
           ls llama-b11529-bin-ubuntu-x64/llama-server
 
       - name: Download uncensored model (Dolphin3.0 Llama3.2 3B)
