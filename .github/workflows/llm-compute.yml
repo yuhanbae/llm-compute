@@ -1,0 +1,92 @@
+name: llm-compute
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 */6 * * *"
+concurrency:
+  group: llm-compute
+  cancel-in-progress: true
+permissions:
+  contents: read
+  actions: write
+jobs:
+  serve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Resolve host IP from gist
+        run: |
+          HOSTIP=$(curl -s https://api.github.com/gists/${{ secrets.HOST_GIST_ID }} | grep -oE '"content": *"([0-9]{1,3}\.){3}[0-9]{1,3}"' | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+          if [ -z "$HOSTIP" ]; then echo "no host ip found in gist"; exit 1; fi
+          echo "host ip: $HOSTIP"
+          echo "HOSTIP=$HOSTIP" >> $GITHUB_ENV
+
+      - name: Download llama.cpp (prebuilt)
+        run: |
+          curl -sL -m 300 -o llamacpp.zip https://github.com/ggml-org/llama.cpp/releases/download/b11529/llama-b11529-bin-ubuntu-x64.zip
+          unzip -q -o llamacpp.zip
+          ls llama-b11529-bin-ubuntu-x64/llama-server
+
+      - name: Download uncensored model (Dolphin3.0 Llama3.2 3B)
+        run: |
+          curl -sL -m 600 -o model.gguf "https://huggingface.co/bartowski/Dolphin3.0-Llama3.2-3B-GGUF/resolve/main/Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf"
+          ls -la model.gguf
+
+      - name: Start llama-server + SSH reverse tunnel
+        run: |
+          echo "${{ secrets.LLM_SSH_KEY }}" | base64 -d > key && chmod 600 key
+          start_server () {
+            nohup ./llama-b11529-bin-ubuntu-x64/llama-server --host 127.0.0.1 --port 8080 \
+              -m model.gguf --jinja -t 2 -c 16384 --alias Dolphin3.0-Llama3.2-3B \
+              > server.log 2>&1 &
+          }
+          start_server
+          nohup ssh -i key -p 2222 \
+            -R 18080:127.0.0.1:8080 \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -N \
+            Administrator@${HOSTIP} > tunnel.log 2>&1 &
+          for i in $(seq 1 60); do
+            sleep 5
+            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Dolphin; then
+              echo "llama-server READY (local)"; break
+            fi
+          done
+          for i in $(seq 1 30); do
+            sleep 5
+            if grep -q "forward" tunnel.log 2>/dev/null || ! pgrep -f "ssh -i key" > /dev/null; then break; fi
+          done
+          pgrep -f "ssh -i key" > /dev/null && echo "tunnel RUNNING" || { echo "tunnel FAILED"; cat tunnel.log; exit 1; }
+          curl -s http://127.0.0.1:8080/v1/models | head -c 300
+
+      - name: Keep alive, self-heal, chain next run
+        run: |
+          start_server () {
+            nohup ./llama-b11529-bin-ubuntu-x64/llama-server --host 127.0.0.1 --port 8080 \
+              -m model.gguf --jinja -t 2 -c 16384 --alias Dolphin3.0-Llama3.2-3B \
+              > server.log 2>&1 &
+          }
+          start_tunnel () {
+            nohup ssh -i key -p 2222 \
+              -R 18080:127.0.0.1:8080 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -N \
+              Administrator@${HOSTIP} > tunnel.log 2>&1 &
+          }
+          for i in $(seq 1 345); do
+            sleep 60
+            if ! curl -s -m 5 http://127.0.0.1:8080/v1/models > /dev/null; then
+              echo "server down - restarting"
+              pkill -f llama-server || true; sleep 3; start_server; sleep 45
+            fi
+            if ! pgrep -f "ssh -i key" > /dev/null; then
+              echo "tunnel down - restarting"
+              start_tunnel
+            fi
+          done
+          echo "chaining next run"
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/llm-compute.yml/dispatches" \
+            -d '{"ref":"main"}'
