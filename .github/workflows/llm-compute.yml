@@ -25,7 +25,7 @@ jobs:
         run: |
           curl -sL -m 300 -o llamacpp.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b11529/llama-b11529-bin-ubuntu-x64.tar.gz
           tar xzf llamacpp.tar.gz
-          ls llama-b11529-bin-ubuntu-x64/llama-server
+          ls llama-b11529/llama-server
 
       - name: Download uncensored model (Dolphin3.0 Llama3.2 3B)
         run: |
@@ -36,7 +36,7 @@ jobs:
         run: |
           echo "${{ secrets.LLM_SSH_KEY }}" | base64 -d > key && chmod 600 key
           start_server () {
-            nohup ./llama-b11529-bin-ubuntu-x64/llama-server --host 127.0.0.1 --port 8080 \
+            nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
               -m model.gguf --jinja -t 2 -c 16384 --alias Dolphin3.0-Llama3.2-3B \
               > server.log 2>&1 &
           }
@@ -62,7 +62,7 @@ jobs:
       - name: Keep alive, self-heal, chain next run
         run: |
           start_server () {
-            nohup ./llama-b11529-bin-ubuntu-x64/llama-server --host 127.0.0.1 --port 8080 \
+            nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
               -m model.gguf --jinja -t 2 -c 16384 --alias Dolphin3.0-Llama3.2-3B \
               > server.log 2>&1 &
           }
