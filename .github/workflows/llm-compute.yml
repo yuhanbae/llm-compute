@@ -20,9 +20,9 @@ jobs:
           tar xzf llamacpp.tar.gz
           ls llama-b11529/llama-server
 
-      - name: Download uncensored model (Dolphin3.0 Llama3.2 3B)
+      - name: Download uncensored model (Qwen3-4B-Instruct-2507 abliterated, tool-capable)
         run: |
-          curl -sL -m 600 -o model.gguf "https://huggingface.co/bartowski/Dolphin3.0-Llama3.2-3B-GGUF/resolve/main/Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf"
+          curl -sL -m 600 -o model.gguf "https://huggingface.co/prithivMLmods/Qwen3-4B-2507-abliterated-GGUF/resolve/main/Qwen3-4B-Instruct-2507-abliterated-GGUF/Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf"
           ls -la model.gguf
 
       - name: Start llama-server + cloudflared tunnel
@@ -37,7 +37,7 @@ jobs:
           start_server
           for i in $(seq 1 60); do
             sleep 5
-            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Dolphin; then echo "llama-server READY"; break; fi
+            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Qwen3; then echo "llama-server READY"; break; fi
           done
           nohup ./cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate > cf.log 2>&1 &
           for i in $(seq 1 40); do
