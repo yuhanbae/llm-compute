@@ -66,6 +66,17 @@ jobs:
               echo "server down - restarting"
               pkill -f llama-server || true; sleep 3; start_server; sleep 45
             fi
+            if ! pgrep -f "cloudflared tunnel" > /dev/null; then
+              echo "tunnel down - restarting"
+              nohup ./cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate > cf.log 2>&1 &
+              sleep 20
+            fi
+            TURL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1)
+            if [ -n "$TURL" ] && [ "$TURL" != "$PUBLISHED" ]; then
+              curl -s -m 20 -X PATCH -H "Authorization: Bearer ${{ secrets.GH_PAT }}"                 "https://api.github.com/gists/${{ secrets.HOST_GIST_ID }}"                 -d "{\"files\":{\"url.txt\":{\"content\":\"$TURL\"}}}" > /dev/null
+              echo "published $TURL"
+              PUBLISHED="$TURL"
+            fi
           done
           echo "chaining next run"
           curl -s -X POST \
