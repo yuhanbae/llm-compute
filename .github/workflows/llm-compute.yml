@@ -43,7 +43,7 @@ jobs:
           for i in $(seq 1 40); do
             sleep 5
             URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1)
-            if [ -n "$URL" ]; then echo "TUNNEL URL: $URL"; echo "TUNNEL_URL=$URL" >> $GITHUB_ENV; break; fi
+            if [ -n "$URL" ]; then echo "TUNNEL URL: $URL"; TUNNEL_URL="$URL"; echo "TUNNEL_URL=$URL" >> $GITHUB_ENV; break; fi
           done
           if [ -z "$TUNNEL_URL" ]; then echo "tunnel failed"; tail -20 cf.log; exit 1; fi
           # publish tunnel URL to the gist (pi's local proxy reads it)
