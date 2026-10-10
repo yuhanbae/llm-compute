@@ -36,10 +36,10 @@ jobs:
           df -h /; ls -la source.gguf
           SIZE=$(stat -c%s source.gguf)
           if [ "$SIZE" -lt 17000000000 ]; then echo "DOWNLOAD TRUNCATED ($SIZE bytes)"; exit 1; fi
-      - name: Quantize to Q2_K
+      - name: Quantize to Q2_K (allow-requantize)
         run: |
           set -o pipefail
-          $QUANT_BIN/llama-quantize source.gguf genesis-q2k.gguf Q2_K 2>&1 | tail -25
+          $QUANT_BIN/llama-quantize --allow-requantize --leave-output-tensor source.gguf genesis-q2k.gguf Q2_K 2>&1 | tail -25
           ls -la genesis-q2k.gguf
           rm -f source.gguf
           df -h /
