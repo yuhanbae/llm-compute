@@ -31,7 +31,7 @@ jobs:
           chmod +x cloudflared
           start_server () {
             nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
-              -m model.gguf --jinja -t 2 -c 16384 --alias Qwen3-4B-Instruct-2507-abliterated \
+              -m model.gguf --jinja -t 3 -c 65536 -fa -ctk q8_0 -ctv q8_0 --alias Qwen3-4B-Instruct-2507-abliterated \
               > server.log 2>&1 &
           }
           start_server
@@ -58,7 +58,7 @@ jobs:
           PUBLISHED="$TUNNEL_URL"
           start_server () {
             nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
-              -m model.gguf --jinja -t 2 -c 16384 --alias Qwen3-4B-Instruct-2507-abliterated \
+              -m model.gguf --jinja -t 3 -c 65536 -fa -ctk q8_0 -ctv q8_0 --alias Qwen3-4B-Instruct-2507-abliterated \
               > server.log 2>&1 &
           }
           for i in $(seq 1 345); do
