@@ -1,0 +1,61 @@
+name: quant-genesis
+on: workflow_dispatch
+concurrency:
+  group: quant-genesis
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  quant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 280
+    steps:
+      - name: Probe runner (disk/RAM)
+        run: |
+          df -h / /home /mnt 2>/dev/null || true
+          nproc; free -h
+          FREE_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          echo "free disk: ${FREE_GB}G"
+          if [ "$FREE_GB" -lt 19 ]; then echo "NOT ENOUGH DISK (need ~29GB peak: 17.3 source + 11.4 output)"; exit 1; fi
+      - name: Get llama.cpp (latest release)
+        run: |
+          TAG=$(curl -s https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          curl -sL -m 300 -o llamacpp.tar.gz "https://github.com/ggml-org/llama.cpp/releases/download/$TAG/llama-$TAG-bin-ubuntu-x64.tar.gz"
+          tar xzf llamacpp.tar.gz
+          BIN=$(find . -maxdepth 2 -name llama-quantize | head -1)
+          echo "Found quantizer: $BIN (tag $TAG)"
+          echo "QUANT_BIN=$(dirname $BIN)" >> $GITHUB_ENV
+          echo "LLAMA_TAG=$TAG" >> $GITHUB_ENV
+      - name: Download Genesis APEX-Compact (17.3GB)
+        run: |
+          curl -sL --retry 5 -C - -m 1800 -o source.gguf "https://huggingface.co/yuhanb/Qwen3.6-35B-A3B-Uncensored-Genesis-Hermes-GGUF/resolve/main/Hermes3.6-35B-A3B-Uncensored-Genesis-APEX-Compact.gguf"
+          df -h /; ls -la source.gguf
+          SIZE=$(stat -c%s source.gguf)
+          if [ "$SIZE" -lt 17000000000 ]; then echo "DOWNLOAD TRUNCATED ($SIZE bytes)"; exit 1; fi
+      - name: Quantize to Q2_K
+        run: |
+          set -o pipefail
+          $QUANT_BIN/llama-quantize source.gguf genesis-q2k.gguf Q2_K 2>&1 | tail -25
+          ls -la genesis-q2k.gguf
+          rm -f source.gguf
+          df -h /
+      - name: Upload to HF + status
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install -q huggingface_hub
+          python - <<'PY'
+          import os, time
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = "yuhanb/Qwen3.6-35B-A3B-Uncensored-Genesis-Hermes-GGUF"
+          print("uploading Q2_K ...")
+          api.upload_file(path_or_fileobj="genesis-q2k.gguf",
+                          path_in_repo="Hermes3.6-35B-A3B-Uncensored-Genesis-Q2_K.gguf",
+                          repo_id=repo, repo_type="model")
+          open("status.txt","w").write(f"done Q2_K {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+          api.upload_file(path_or_fileobj="status.txt", path_in_repo="QUANT_STATUS.txt",
+                          repo_id=repo, repo_type="model")
+          print("UPLOAD DONE")
+          PY
