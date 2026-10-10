@@ -20,9 +20,9 @@ jobs:
           tar xzf llamacpp.tar.gz
           ls llama-b11529/llama-server
 
-      - name: Download uncensored model (Qwen3-4B-Instruct-2507 abliterated, tool-capable)
+      - name: Download uncensored model (Qwen2.5-Coder-7B-Instruct abliterated, code-specialized, from HF)
         run: |
-          curl -sL -m 600 -o model.gguf "https://huggingface.co/prithivMLmods/Qwen3-4B-2507-abliterated-GGUF/resolve/main/Qwen3-4B-Instruct-2507-abliterated-GGUF/Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf"
+          curl -sL -m 900 -o model.gguf "https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-abliterated-Q4_K_M.gguf"
           ls -la model.gguf
 
       - name: Start llama-server + cloudflared tunnel
@@ -31,22 +31,22 @@ jobs:
           chmod +x cloudflared
           start_server () {
             nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
-              -m model.gguf --jinja -t 2 -c 16384 --alias Qwen3-4B-Instruct-2507-abliterated \
+              -m model.gguf --jinja -t 3 -c 16384 --alias Qwen2.5-Coder-7B-Instruct-abliterated \
               > server.log 2>&1 &
           }
           start_server
           for i in $(seq 1 60); do
             sleep 5
-            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Qwen3; then echo "llama-server READY"; break; fi
+            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Qwen2.5-Coder; then echo "llama-server READY"; break; fi
           done
           nohup ./cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate > cf.log 2>&1 &
+          TUNNEL_URL=""
           for i in $(seq 1 40); do
             sleep 5
             URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1)
             if [ -n "$URL" ]; then echo "TUNNEL URL: $URL"; TUNNEL_URL="$URL"; echo "TUNNEL_URL=$URL" >> $GITHUB_ENV; break; fi
           done
           if [ -z "$TUNNEL_URL" ]; then echo "tunnel failed"; tail -20 cf.log; exit 1; fi
-          # publish tunnel URL to the gist (pi's local proxy reads it)
           curl -s -m 20 -X PATCH \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             "https://api.github.com/gists/${{ secrets.HOST_GIST_ID }}" \
@@ -55,9 +55,10 @@ jobs:
 
       - name: Keep alive, self-heal, chain next run
         run: |
+          PUBLISHED="$TUNNEL_URL"
           start_server () {
             nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
-              -m model.gguf --jinja -t 2 -c 16384 --alias Qwen3-4B-Instruct-2507-abliterated \
+              -m model.gguf --jinja -t 3 -c 16384 --alias Qwen2.5-Coder-7B-Instruct-abliterated \
               > server.log 2>&1 &
           }
           for i in $(seq 1 345); do
@@ -73,7 +74,9 @@ jobs:
             fi
             TURL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1)
             if [ -n "$TURL" ] && [ "$TURL" != "$PUBLISHED" ]; then
-              curl -s -m 20 -X PATCH -H "Authorization: Bearer ${{ secrets.GH_PAT }}"                 "https://api.github.com/gists/${{ secrets.HOST_GIST_ID }}"                 -d "{\"files\":{\"url.txt\":{\"content\":\"$TURL\"}}}" > /dev/null
+              curl -s -m 20 -X PATCH -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+                "https://api.github.com/gists/${{ secrets.HOST_GIST_ID }}" \
+                -d "{\"files\":{\"url.txt\":{\"content\":\"$TURL\"}}}" > /dev/null
               echo "published $TURL"
               PUBLISHED="$TURL"
             fi
