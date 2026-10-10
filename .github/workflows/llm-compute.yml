@@ -16,13 +16,13 @@ jobs:
     steps:
       - name: Download llama.cpp (prebuilt)
         run: |
-          curl -sL -m 300 -o llamacpp.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b11529/llama-b11529-bin-ubuntu-x64.tar.gz
+          curl -sL -m 300 -o llamacpp.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b11552/llama-b11552-bin-ubuntu-x64.tar.gz
           tar xzf llamacpp.tar.gz
-          ls llama-b11529/llama-server
+          ls llama-b11552/llama-server
 
-      - name: Download uncensored model (Qwen3-4B-Instruct-2507 abliterated, tool-capable)
+      - name: Download uncensored model (Qwen3.6-35B-A3B-Uncensored-Genesis Q2_K, 12.9GB)
         run: |
-          curl -sL -m 600 -o model.gguf "https://huggingface.co/prithivMLmods/Qwen3-4B-2507-abliterated-GGUF/resolve/main/Qwen3-4B-Instruct-2507-abliterated-GGUF/Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf"
+          curl -sL --retry 5 -C - -m 1200 -o model.gguf "https://huggingface.co/yuhanb/Qwen3.6-35B-A3B-Uncensored-Genesis-Hermes-GGUF/resolve/main/Hermes3.6-35B-A3B-Uncensored-Genesis-Q2_K.gguf"
           ls -la model.gguf
 
       - name: Start llama-server + cloudflared tunnel
@@ -30,14 +30,14 @@ jobs:
           curl -sL -m 120 -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
           start_server () {
-            nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
-              -m model.gguf --jinja -t 3 -c 65536 --alias Qwen3-4B-Instruct-2507-abliterated \
+            nohup ./llama-b11552/llama-server --host 127.0.0.1 --port 8080 \
+              -m model.gguf --jinja -t 3 -c 12288 --alias Qwen3.6-35B-A3B-Uncensored-Genesis \
               > server.log 2>&1 &
           }
           start_server
           for i in $(seq 1 60); do
             sleep 5
-            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Qwen3; then echo "llama-server READY"; break; fi
+            if curl -s -m 5 http://127.0.0.1:8080/v1/models | grep -q Genesis; then echo "llama-server READY"; break; fi
           done
           nohup ./cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate > cf.log 2>&1 &
           TUNNEL_URL=""
@@ -57,8 +57,8 @@ jobs:
         run: |
           PUBLISHED="$TUNNEL_URL"
           start_server () {
-            nohup ./llama-b11529/llama-server --host 127.0.0.1 --port 8080 \
-              -m model.gguf --jinja -t 3 -c 65536 --alias Qwen3-4B-Instruct-2507-abliterated \
+            nohup ./llama-b11552/llama-server --host 127.0.0.1 --port 8080 \
+              -m model.gguf --jinja -t 3 -c 12288 --alias Qwen3.6-35B-A3B-Uncensored-Genesis \
               > server.log 2>&1 &
           }
           for i in $(seq 1 345); do
