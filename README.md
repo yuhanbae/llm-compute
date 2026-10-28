@@ -1,4 +1,10 @@
-# Gist URL (no /v1 suffix; the proxy builds the path itself)
-url.txt=https://advert-bracket-drawn-anticipated.trycloudflare.com
-url-ablit.txt=https://adsl-lounge-aud-restaurant.trycloudflare.com
-ip.txt=203.83.39.65
+# yuhanbae/llm-compute
+
+GitHub Actions-hosted llama.cpp server for uncensored LLMs.
+
+See `.github/workflows/` for the serving pipelines:
+- `llm-compute.yml` — Qwen3.6-35B-A3B-Uncensored-Genesis (main slot)
+- `serve-ablit.yml` — Mistral-NeMo-12B-Abliterated (ablit slot)
+
+Both publish their rotating trycloudflare tunnel to Gist `7ec01cb438fa7f501847b725ed44063a`.
+The stable public face is the Railway proxy: `https://proxy-production-7ec3.up.railway.app/v1`
